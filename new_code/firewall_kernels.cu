@@ -47,40 +47,67 @@ __device__ unsigned int bswap32(unsigned int x) {
            ((x << 24) & 0xff000000); // byte 0 to byte 3
 }
 
-/* Compute checksum for count bytes starting at addr, using one's complement of one's complement sum*/
 __device__ unsigned short compute_checksum(unsigned short* addr, unsigned int count) {
-    register unsigned long sum = 0;
-    while (count > 1) {
-        sum += *addr++;
-        count -= 2;
+    unsigned long sum = 0;
+    int idx=0;
+    //ORG
+    // while (count > 1) {
+    //     sum += *addr++;
+    //     count -= 2;
+    // }
+
+    //Mod 1
+    while (count > 0) {
+        sum += addr[idx];idx++;
+        count -= 1;
+        // printf("DEB: 0x%04x :val:0x%04x\n", sum,addr[idx-1]);
+        if(sum>=0x10000){
+            sum-=0x10000;
+            sum+=0x1;
+            // printf("Carry to sum: 0x%04x \n", sum);
+        }
     }
-    // if any bytes left, pad the bytes and add
+
+    //Mod 2
+    // while (count > 0) {
+    //     sum += *addr++;
+    //     count -= 1;
+    //     //DEB
+    //     printf("DEB: 0x%04x :val:0x%04x\n", sum,*addr);
+    //     if(sum>=0x10000){
+    //         sum-=0x10000;
+    //         sum+=0x1;
+    //         printf("Carry to sum: 0x%04x \n", sum);
+    //     }
+    // }
+
+    //ORG
     if (count > 0) {
-        sum += ((*addr) & bswap16(0xFF00));
+        sum += ((*addr) & 0xFF) << 8;
     }
-    // Fold sum to 16 bits: add carrier to result
     while (sum >> 16) {
         sum = (sum & 0xffff) + (sum >> 16);
     }
-    // one's complement
     sum = ~sum;
-    return ((unsigned short)sum);
+    return (unsigned short)sum;
 }
 
 /* set ip checksum of a given ip header*/
-__device__ void compute_ip_checksum(char* iphdrp, unsigned int junk) {
-    // iphdrp->check = 0;
+__device__ void compute_ip_checksum(struct iphdr* iphdrp, unsigned int junk) {
+    //iphdrp->check = 0;
     junk = 0;
-    // iphdrp->check = compute_checksum((unsigned short*)iphdrp, ((iphdrp->ihl_version << 4) >> 4) << 2);
+    iphdrp->check = compute_checksum((unsigned short*)iphdrp->check, ((iphdrp->ihl_version << 4) >> 4) << 2);
     //  iphdrp->check = compute_checksum((unsigned short*)iphdrp, ((junk << 4) >> 4) << 2);
-    junk = compute_checksum((unsigned short*)iphdrp, ((junk << 4) >> 4) << 2);
+    //iphdrp->check = compute_checksum((unsigned short*)iphdrp, ((junk << 4) >> 4) << 2);
+    
+
 }
 
 /* set tcp checksum: given IP header and tcp segment */
 __device__ void compute_tcp_checksum(char* pIph, unsigned short* ipPayload, unsigned int junk) {
     register unsigned long sum = 0;
     // printf("Is this misaligned? %d\n", pIph->tot_len);
-    unsigned short tcpLen = bswap16(pIph->tot_len) - (((pIph->ihl_version << 4) >> 4) << 2);
+    //unsigned short tcpLen = bswap16(pIph->tot_len) - (((pIph->ihl_version << 4) >> 4) << 2);
     unsigned short tcpLen = bswap16(0x6) - (((junk << 4) >> 4) << 2);
     // struct tcphdr *tcphdrp = (struct tcphdr*)(ipPayload);
     // add the pseudo header
@@ -348,16 +375,16 @@ __global__ void process_pkt(char* input_buf,
                     }
                 }
 
-                /*input_buf[pkt_start+14+12] = 0x14;
+                input_buf[pkt_start+14+12] = 0x14;
                 input_buf[pkt_start+14+13] = 0x00;
                 input_buf[pkt_start+14+14] = 0x00;
-                input_buf[pkt_start+14+15] = 0x01;*/
+                input_buf[pkt_start+14+15] = 0x01;
                 // printf("Ending NAT.\n");
 
                 compute_tcp_checksum(
                   &input_buf[pkt_start + 14], (unsigned short*)input_buf[pkt_start + ip_header_len], num_lines);
 
-                compute_ip_checksum(&input_buf[pkt_start + 14], num_lines);
+                compute_ip_checksum((struct iphdr*)&input_buf[pkt_start + 14], num_lines);
 
             }
 
@@ -371,15 +398,15 @@ __global__ void process_pkt(char* input_buf,
                     }
                 }
 
-                /*input_buf[pkt_start+14+12] = nat_ip >> 24;
+                input_buf[pkt_start+14+12] = nat_ip >> 24;
                 input_buf[pkt_start+14+13] = (nat_ip << 8) >> 24;
                 input_buf[pkt_start+14+14] = (nat_ip << 16) >> 24;
-                input_buf[pkt_start+14+15] = (nat_ip << 24) >> 24;*/
+                input_buf[pkt_start+14+15] = (nat_ip << 24) >> 24;
 
                 compute_tcp_checksum(
                   &input_buf[pkt_start + 14], (unsigned short*)input_buf[pkt_start + ip_header_len], num_lines);
 
-                compute_ip_checksum(&input_buf[pkt_start + 14], num_lines);
+                compute_ip_checksum((struct iphdr*)&input_buf[pkt_start + 14], num_lines);
             }
 
             // Intranet packet

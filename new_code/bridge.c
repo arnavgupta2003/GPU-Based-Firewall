@@ -37,7 +37,7 @@ unsigned int* nat_table;
 unsigned long* nat_set;
 int num_lines;
 
-static int verbose = 0;
+static int verbose = 1;
 
 static int do_abort = 0;
 static int zerocopy = 1; /* enable zerocopy if possible */
@@ -570,3 +570,4 @@ int main(int argc, char** argv) {
 
     return (0);
 }
+
