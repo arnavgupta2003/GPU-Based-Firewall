@@ -1,5 +1,5 @@
 #include <stdio.h>
-
+#include <netinet/in.h>
 extern "C" {
 #include "firewall_kernels.h"
 }
@@ -50,17 +50,53 @@ __device__ unsigned int bswap32(unsigned int x) {
 __device__ unsigned short compute_checksum(unsigned short* addr, unsigned int count) {
     unsigned long sum = 0;
     int idx=0;
+
+    // printf("State: %u \n",count);
+
+    // for(int i=0;i<10;i++){
+    //     printf("DEB: 0x%04x :\n", *addr++);
+    // }
+
+
+
     //ORG
     // while (count > 1) {
     //     sum += *addr++;
     //     count -= 2;
+    //     printf("DEB: 0x%04x :\n", sum);
+    // }
+    
+    //Mod 1
+    // while (count > 0) {
+    //     sum += addr[idx];idx++;
+    //     count -= 1;
+    //     printf("DEB: 0x%04x :val:0x%04x\n", sum,addr[idx-1]);
+
+
+    //     if(sum>0xffff){
+    //         unsigned int carry = sum& 0xff0000;
+    //         sum&=0xffff;
+    //         sum+=carry;
+    //     }
+
+    //     // if(sum>=0x10000){
+    //     //     sum-=0x10000;
+    //     //     sum+=0x1;
+    //     //     printf("Carry to sum: 0x%04x \n", sum);
+    //     // }
     // }
 
-    //Mod 1
+    //Mod 3
     while (count > 0) {
-        sum += addr[idx];idx++;
+        // unsigned int temp = addr[idx]*100;
+        // idx++;
+        // temp+=addr[idx];idx++;
+
+        // sum += addr[idx];idx++;
+        sum+=*addr++;
+      
         count -= 1;
-        // printf("DEB: 0x%04x :val:0x%04x\n", sum,addr[idx-1]);
+        // printf("DEB: 0x%04x :val:0x%04x \n", sum,addr[idx-1]);
         if(sum>=0x10000){
             sum-=0x10000;
             sum+=0x1;
@@ -68,6 +104,7 @@ __device__ unsigned short compute_checksum(unsigned short* addr, unsigned int co
         }
     }
 
+    // printf("FUNC RET\n\n" );
     //Mod 2
     // while (count > 0) {
     //     sum += *addr++;
@@ -89,6 +126,7 @@ __device__ unsigned short compute_checksum(unsigned short* addr, unsigned int co
         sum = (sum & 0xffff) + (sum >> 16);
     }
     sum = ~sum;
+
     return (unsigned short)sum;
 }
 
@@ -96,16 +134,38 @@ __device__ unsigned short compute_checksum(unsigned short* addr, unsigned int co
 __device__ void compute_ip_checksum(struct iphdr* iphdrp, unsigned int junk) {
     //iphdrp->check = 0;
     junk = 0;
-    iphdrp->check = compute_checksum((unsigned short*)iphdrp->check, ((iphdrp->ihl_version << 4) >> 4) << 2);
+
+    //DEB
+    // printf("cksm:BEFORE 0x%04x \n", iphdrp->check);
+    //END DEB
+
+    iphdrp->check=0x0000;
+    // iphdrp->check = compute_checksum((unsigned short*)iphdrp->check, ((iphdrp->ihl_version << 4) >> 4) << 2);
+    iphdrp->check = compute_checksum((unsigned short *)iphdrp,10);
+
+    //DEB
+
+    // printf("cksm:AFTER 0x%04x \n", iphdrp->check);
+    //END DEB
+
     //  iphdrp->check = compute_checksum((unsigned short*)iphdrp, ((junk << 4) >> 4) << 2);
     //iphdrp->check = compute_checksum((unsigned short*)iphdrp, ((junk << 4) >> 4) << 2);
     
 
 }
+__device__ unsigned short swap_bytes(unsigned short val) {
+    return (val << 8) | (val >> 8);
+}
+
 
 /* set tcp checksum: given IP header and tcp segment */
 __device__ void compute_tcp_checksum(char* pIph, unsigned short* ipPayload, unsigned int junk) {
     register unsigned long sum = 0;
+    //Deb:
+
+
+
+    //Org
     // printf("Is this misaligned? %d\n", pIph->tot_len);
     //unsigned short tcpLen = bswap16(pIph->tot_len) - (((pIph->ihl_version << 4) >> 4) << 2);
     unsigned short tcpLen = bswap16(0x6) - (((junk << 4) >> 4) << 2);
@@ -143,6 +203,65 @@ __device__ void compute_tcp_checksum(char* pIph, unsigned short* ipPayload, unsi
     sum = ~sum;
     // set computation result
     junk = (unsigned short)sum;
+
+    //Mod 1
+    // register uint32_t sum = 0;
+    // int ipPayloadLen =  junk;
+
+    // // Add the pseudo header
+    // sum += (pIph[12] << 8) + pIph[13]; // Source IP
+    // sum += (pIph[14] << 8) + pIph[15]; // Destination IP
+    // sum += IPPROTO_TCP;
+    // sum += htons(ipPayloadLen);
+
+    // // Add the IP payload
+    // for (int i = 0; i < ipPayloadLen; i++) {
+    //     sum += htons(ipPayload[i]);
+    // }
+
+    // // If any bytes left, pad the bytes and add
+    // if (ipPayloadLen % 2 != 0) {
+    //     sum += ((unsigned short)pIph[junk] << 8);
+    // }
+
+    // // Fold 32-bit sum to 16 bits: add carrier to result
+    // while (sum >> 16) {
+    //     sum = (sum & 0xffff) + (sum >> 16);
+    // }
+    // sum = ~sum;
+
+    // // Set computation result
+    // junk =  (unsigned short)sum;
+
+    //Mod 2
+    // register uint32_t sum = 0;
+    // int ipPayloadLen = junk;
+
+    // // Add the pseudo header
+    // sum += (pIph[12] << 8) + pIph[13]; // Source IP
+    // sum += (pIph[14] << 8) + pIph[15]; // Destination IP
+    // sum += 6; // IPPROTO_TCP
+    // sum += swap_bytes(ipPayloadLen);
+
+    // // Add the IP payload
+    // for (int i = 0; i < ipPayloadLen; i++) {
+    //     sum += swap_bytes(ipPayload[i]);
+    // }
+
+    // // If any bytes left, pad the bytes and add
+    // if (ipPayloadLen % 2 != 0) {
+    //     sum += ((unsigned short)pIph[ipPayloadLen] << 8);
+    // }
+
+    // // Fold 32-bit sum to 16 bits: add carrier to result
+    // while (sum >> 16) {
+    //     sum = (sum & 0xffff) + (sum >> 16);
+    // }
+    // sum = ~sum;
+
+    // // Set computation result
+    // junk = (unsigned short)sum;
+
 }
 
 __device__ unsigned int fnv_hash_long(unsigned long l1) {
@@ -350,6 +469,9 @@ __global__ void process_pkt(char* input_buf,
             l1                 = l1 << 32 | src_port;
             unsigned int hash1 = fnv_hash_long(l1) % 10000;
             unsigned int hash2 = fnv_hash_short(dst_port) % 10000;
+            //DEB:
+            // printf("Before NAT IF: %u %u port: %u %u \n",src_addr,dst_addr,src_port,dst_port);
+            //Close DEB
 
             if (((src_addr & 0xffffff00) == 0x0a000000) && ((dst_addr & 0xffffff00) != 0x0a000000)) {
                 for (int i = 0; i < 10; i++) {
@@ -365,30 +487,61 @@ __global__ void process_pkt(char* input_buf,
                         nat_set[index1] = l1;
                         for (int j = 0; j < 10; j++) {
                             int index2 = hash2 * 2 * 10 + 2 * j;
+
+                            // //DEB:
+                            
+                            // printf("Before DEB: %u %lu \n",nat_table[index2],nat_table[index2+1]);
+                            
+                            // //Close DEB
                             if (nat_table[index2] == 0) {
                                 nat_table[index2]     = dst_port;
                                 nat_table[index2 + 1] = src_addr;
+
+                             
+                                
                                 break;
                             }
+
+                           
                         }
                         break;
                     }
+
+                    
                 }
 
-                input_buf[pkt_start+14+12] = 0x14;
-                input_buf[pkt_start+14+13] = 0x00;
-                input_buf[pkt_start+14+14] = 0x00;
-                input_buf[pkt_start+14+15] = 0x01;
-                // printf("Ending NAT.\n");
+                // input_buf[pkt_start+14+12] = 0x14;
+                // input_buf[pkt_start+14+13] = 0x00;
+                // input_buf[pkt_start+14+14] = 0x00;
+                // input_buf[pkt_start+14+15] = 0x01;
+                // printf("Ending NAT. deb: %c %c %c %c \n",input_buf[pkt_start+14+12],input_buf[pkt_start+14+13],
+                //     input_buf[pkt_start+14+14],input_buf[pkt_start+14+15]);
 
+                //DEB: printing NAT
+                // for(int i=0;i<sizeof(nat_table);i++){
+                //     printf("NAT[%d] %lu \n",i,nat_table[i]);
+                // }
+
+                // printf("Ending NAT\n");
+                //ENDIng DEB
+
+                //DEB:printing input_buf
+                // for (int i = pkt_start; i < pkt_start+14+18; ++i)
+                // {
+                //     printf("0x%04x \n",input_buf[i]);
+                // }
+                //Ending deb
+                
                 compute_tcp_checksum(
                   &input_buf[pkt_start + 14], (unsigned short*)input_buf[pkt_start + ip_header_len], num_lines);
 
                 compute_ip_checksum((struct iphdr*)&input_buf[pkt_start + 14], num_lines);
 
+
+               
             }
 
-            else if (dst_addr == 0x14000001) {
+            else if (dst_addr == 0xA000001) {//dest_add = 10.0.0.1
                 unsigned int nat_ip;
                 unsigned int hash2 = fnv_hash_short(dst_port) % 10000;
                 for (int i = 0; i < 10; i++) {
@@ -398,15 +551,18 @@ __global__ void process_pkt(char* input_buf,
                     }
                 }
 
-                input_buf[pkt_start+14+12] = nat_ip >> 24;
-                input_buf[pkt_start+14+13] = (nat_ip << 8) >> 24;
-                input_buf[pkt_start+14+14] = (nat_ip << 16) >> 24;
-                input_buf[pkt_start+14+15] = (nat_ip << 24) >> 24;
+                // input_buf[pkt_start+14+12] = nat_ip >> 24;
+                // input_buf[pkt_start+14+13] = (nat_ip << 8) >> 24;
+                // input_buf[pkt_start+14+14] = (nat_ip << 16) >> 24;
+                // input_buf[pkt_start+14+15] = (nat_ip << 24) >> 24;
 
+                
                 compute_tcp_checksum(
                   &input_buf[pkt_start + 14], (unsigned short*)input_buf[pkt_start + ip_header_len], num_lines);
 
                 compute_ip_checksum((struct iphdr*)&input_buf[pkt_start + 14], num_lines);
+
+               
             }
 
             // Intranet packet
@@ -457,3 +613,4 @@ void run_firewall(char* input_buf,
     cudaFree(d_output_buf);
     cudaFree(d_len);
 }
+
