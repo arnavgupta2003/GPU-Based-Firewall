@@ -351,118 +351,12 @@ __device__ void compute_tcp_checksum(struct tcphdr* tcphdrp, unsigned short* ipP
     // }
     
 
-    printf("TCP struct \n\n");
-    printf("src 0x%04x \n",tcphdrp->source);
-    printf("dest 0x%04x \n",tcphdrp->dest);
-    printf("chksm 0x%04x \n",tcphdrp->check);
+    // printf("TCP struct \n\n");
+    // printf("src 0x%04x \n",tcphdrp->source);
+    // printf("dest 0x%04x \n",tcphdrp->dest);
+    // printf("chksm 0x%04x \n",tcphdrp->check);
     
-    //Org
-    // printf("Is this misaligned? %d\n", pIph->tot_len);
-    //unsigned short tcpLen = bswap16(pIph->tot_len) - (((pIph->ihl_version << 4) >> 4) << 2);
-    // unsigned short tcpLen = bswap16(0x6) - (((junk << 4) >> 4) << 2);
-    // struct tcphdr *tcphdrp = (struct tcphdr*)(ipPayload);
-    // add the pseudo header
-    // the source ip
-    // sum += (pIph->saddr>>16)&0xFFFF;
-    // sum += (pIph->saddr)&0xFFFF;
-    //  sum += junk>>16&0xFFFF;
-    //  sum += junk & 0xFFFF;
-    // the dest ip
-    // printf("DEB afeter struct: 0x%04x :\n", tcphdrp->check);
-    // sum += (pIph->daddr>>16)&0xFFFF;
-    // sum += (pIph->daddr)&0xFFFF;
-    // protocol and reserved: 6
-    // sum += bswap16(0x6); // IPPROTO_TCP
-    // // the length
-    // sum += bswap16(tcpLen);
-
-    // // add the IP payload
-    // // initialize checksum to 0
-    // junk = 0;
-    // while (tcpLen > 1) {
-    //     sum += *ipPayload++;
-    //     tcpLen -= 2;
-    // }
-    // // if any bytes left, pad the bytes and add
-    // if (tcpLen > 0) {
-    //     // printf("+++++++++++padding, %dn", tcpLen);
-    //     sum += ((*ipPayload) & bswap16(0xFF00));
-    // }
-    // // Fold 32-bit sum to 16 bits: add carrier to result
-    // while (sum >> 16) {
-    //     sum = (sum & 0xffff) + (sum >> 16);
-    // }
-    // sum = ~sum;
-    // // set computation result
-    // junk = (unsigned short)sum;
-
-    // Mod 1
-    // register uint32_t sum = 0;
-    // int ipPayloadLen =  junk;
-
-    // // Add the pseudo header
-    // sum += (pIph[12] << 8) + pIph[13]; // Source IP
-    // sum += (pIph[14] << 8) + pIph[15]; // Destination IP
-    // sum += IPPROTO_TCP;
-    // sum += htons(ipPayloadLen);
-
-    // // Add the IP payload
-    // for (int i = 0; i < ipPayloadLen; i++) {
-    //     sum += htons(ipPayload[i]);
-    // }
-
-    // // If any bytes left, pad the bytes and add
-    // if (ipPayloadLen % 2 != 0) {
-    //     sum += ((unsigned short)pIph[junk] << 8);
-    // }
-
-    // // Fold 32-bit sum to 16 bits: add carrier to result
-    // while (sum >> 16) {
-    //     sum = (sum & 0xffff) + (sum >> 16);
-    // }
-    // sum = ~sum;
-
-    // // Set computation result
-    // junk =  (unsigned short)sum;
-
-    // Mod 2
-    // register uint32_t sum = 0;
-    // int ipPayloadLen = junk;
-
-    // // Add the pseudo header
-    // sum += (pIph[12] << 8) + pIph[13]; // Source IP
-    // sum += (pIph[14] << 8) + pIph[15]; // Destination IP
-    // sum += 6; // IPPROTO_TCP
-    // sum += swap_bytes(ipPayloadLen);
-
-    // // Add the IP payload
-    // for (int i = 0; i < ipPayloadLen; i++) {
-    //     sum += swap_bytes(ipPayload[i]);
-    // }
-
-    // // If any bytes left, pad the bytes and add
-    // if (ipPayloadLen % 2 != 0) {
-    //     sum += ((unsigned short)pIph[ipPayloadLen] << 8);
-    // }
-
-    // // Fold 32-bit sum to 16 bits: add carrier to result
-    // while (sum >> 16) {
-    //     sum = (sum & 0xffff) + (sum >> 16);
-    // }
-    // sum = ~sum;
-
-    // // Set computation result
-    // junk = (unsigned short)sum;
-
-    // for (int i = 0; i < 50; ++i){
-    //     /* code */
-    //     printf("DEB pIph: 0x%04x :\n", pIph[i]);
-    //     printf("DEB ipPayload: 0x%04x :\n", ipPayload[i]);
-
-    // } 
-
-    // struct tcphdr *tcphdrp = (struct tcphdr*)(ipPayload);
-    // printf("DEB afeter struct: 0x%04x :\n", tcphdrp->check);
+  
 
 
     // Mod 2
@@ -501,16 +395,16 @@ __device__ void compute_tcp_checksum(struct tcphdr* tcphdrp, unsigned short* ipP
     // printf("DEB SUM chksm: 0x%04x : --Added Ps\n", sum);
     
     int tcpLen = (int)tot_l - 20;
-    printf("TCP LEN: %d  hex 0x%04x\n",tcpLen,tcpLen<<8);
+    // printf("TCP LEN: %d  hex 0x%04x\n",tcpLen,tcpLen<<8);
     sum+=tcpLen<<8;
     // Add the IP payload
-    printf("Loop  st:10 end:%d\n",tcpLen/2 +9);
-    for (int i = 10; i <= tcpLen/2 +9; i++) {//issue
+    // printf("Loop  st:10 end:%d\n",(tcpLen+1)/2 +9);
+    for (int i = 10; i <= (tcpLen+1)/2 +9; i++) {//issue
         if(i!=18) {
             sum += *ipPayload++;
-            printf("DEB SUM chksm: 0x%04x | nxt val 0x%04x :\n", sum,*ipPayload);
+            // printf("DEB SUM chksm: 0x%04x | nxt val 0x%04x :\n", sum,*ipPayload);
         }else{
-            printf("SLIP :%d\n",i);
+            // printf("SLIP :%d\n",i);
             *ipPayload++;
         }
     }
@@ -531,7 +425,7 @@ __device__ void compute_tcp_checksum(struct tcphdr* tcphdrp, unsigned short* ipP
 
     int junk =  (unsigned short)sum;
 
-    printf("DEB chksm FINAL: 0x%04x :\n", junk);
+    // printf("DEB chksm FINAL: 0x%04x :\n", junk);
 
 
 }
