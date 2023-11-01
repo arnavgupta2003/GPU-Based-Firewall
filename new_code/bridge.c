@@ -203,10 +203,10 @@ static int rings_process_move(struct netmap_ring* rxring, struct netmap_ring* tx
         // nm_pkt_copy(rxbuf, txbuf, ts->len);
         // D("Came\n");
         
-        for (iter = 0; iter < rs->len; iter++) {
-            input_pkt_buf[iter + old_len] = rxbuf[iter];//IMPP
-        }
-        // memcpy(&input_pkt_buf[old_len], rxbuf, rs->len);//try
+        // for (iter = 0; iter < rs->len; iter++) {
+        //     input_pkt_buf[iter + old_len] = rxbuf[iter];//IMPP
+        // }
+        memcpy(&input_pkt_buf[old_len], rxbuf, rs->len);//try
         old_len += rs->len;
         i++;
         // D("DID??\n");
