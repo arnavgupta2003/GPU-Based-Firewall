@@ -21,6 +21,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <time.h>
@@ -36,8 +37,8 @@ unsigned long* ruleset;
 unsigned int* nat_table;
 unsigned long* nat_set;
 int num_lines;
-
-static int verbose = 1;
+struct timespec time1;
+static int verbose = 0;
 
 static int do_abort = 0;
 static int zerocopy = 1; /* enable zerocopy if possible */
@@ -80,7 +81,7 @@ static int tx_slots_avail(struct nmport_d* d) {
  * if zerocopy is possible. Otherwise fall back on packet copying.
  */
 static int rings_move(struct netmap_ring* rxring, struct netmap_ring* txring, u_int limit, const char* msg) {
-    u_int j, k, m = 0;
+    u_int j, k, m = 0,iter,old_len = 0;;
 
     /* print a warning if any of the ring flags is set (e.g. NM_REINIT) */
     if (rxring->flags || txring->flags)
@@ -109,6 +110,20 @@ static int rings_move(struct netmap_ring* rxring, struct netmap_ring* txring, u_
             D("%s: fwd len %u, rx[%d] -> tx[%d]", msg, rs->len, j, k);
         }
         ts->len = rs->len;
+
+
+        // char* rxbuf = NETMAP_BUF(rxring, rs->buf_idx);
+        
+        // for (iter = 0; iter < rs->len; iter++) {
+        //     input_pkt_buf[iter] = rxbuf[iter];//IMPP
+        // }
+        // nm_pkt_copy(rxbuf,input_pkt_buf,rs->len);
+        // run_firewall(input_pkt_buf, output_pkt_buf, rs->len, limit, len[limit], ruleset, num_lines, nat_table, nat_set);
+
+
+        // char* txbuf = NETMAP_BUF(txring, ts->buf_idx);
+        // nm_pkt_copy(rxbuf, txbuf, ts->len);
+
         if (zerocopy) {
             uint32_t pkt = ts->buf_idx;
             ts->buf_idx  = rs->buf_idx;
@@ -140,6 +155,9 @@ static int rings_move(struct netmap_ring* rxring, struct netmap_ring* txring, u_
 static int rings_process_move(struct netmap_ring* rxring, struct netmap_ring* txring, u_int limit, const char* msg) {
     u_int i, j, k, m = 0, iter, old_len = 0;
     u_int limit1, limit2;
+
+    // clock_gettime(CLOCK_MONOTONIC, &time1);
+    // printf("Started PKT FWD: %ld s\n", time1.tv_sec*1000000000L + time1.tv_nsec);
 
     /* print a warning if any of the ring flags is set (e.g. NM_REINIT) */
     if (rxring->flags || txring->flags)
@@ -175,19 +193,23 @@ static int rings_process_move(struct netmap_ring* rxring, struct netmap_ring* tx
                     msg, rs->len, j, k);
         }*/
 
+
         // ts->len = rs->len;
         len[i + 1] = rs->len + len[i];
+        // printf("LEN %d %d \n",len[0],len[1]);
 
         char* rxbuf = NETMAP_BUF(rxring, rs->buf_idx);
         // char *txbuf = NETMAP_BUF(txring, ts->buf_idx);
         // nm_pkt_copy(rxbuf, txbuf, ts->len);
-
+        // D("Came\n");
+        
         for (iter = 0; iter < rs->len; iter++) {
-            input_pkt_buf[iter + old_len] = rxbuf[iter];
+            input_pkt_buf[iter + old_len] = rxbuf[iter];//IMPP
         }
+        // memcpy(&input_pkt_buf[old_len], rxbuf, rs->len);//try
         old_len += rs->len;
         i++;
-
+        // D("DID??\n");
         /*
          * Copy the NS_MOREFRAG from rs to ts, leaving any
          * other flags unchanged.
@@ -196,10 +218,20 @@ static int rings_process_move(struct netmap_ring* rxring, struct netmap_ring* tx
         j = nm_ring_next(rxring, j);
         // k = nm_ring_next(txring, k);
     }
-    run_firewall(input_pkt_buf, output_pkt_buf, len, limit, len[limit], ruleset, num_lines, nat_table, nat_set);
-    // for(int count=0;count<len[limit];count++) {
-    // 	output_pkt_buf[count] = input_pkt_buf[count];
+
+    // clock_gettime(CLOCK_MONOTONIC, &time1);
+    // printf("Just Before NMCPY: %ld s\n", time1.tv_sec*1000000000L + time1.tv_nsec);
+
+     // run_firewall(input_pkt_buf, output_pkt_buf, len, limit, len[limit], ruleset, num_lines, nat_table, nat_set);
+        // for(int count=0;count<len[limit];count++) {
+    //  output_pkt_buf[count] = input_pkt_buf[count];
     // }
+    // output_pkt_buf = input_pkt_buf;
+    nm_pkt_copy(input_pkt_buf, output_pkt_buf, len[limit]);
+
+    // clock_gettime(CLOCK_MONOTONIC, &time1);
+    // printf("Just After NMCPY: %ld s\n", time1.tv_sec*1000000000L + time1.tv_nsec);
+
 
     /*printf("Done\n");
     printf("limit is %d\n", len[limit]);
@@ -293,6 +325,7 @@ static int ports_process_move(struct nmport_d* src, struct nmport_d* dst, u_int 
             di++;
             continue;
         }
+
         m += rings_process_move(rxring, txring, limit, msg);
         // m += rings_move(rxring, txring, limit, msg);
     }
@@ -343,8 +376,13 @@ int main(int argc, char** argv) {
     int iter = 0;
     len[0]   = 0;
 
-    input_pkt_buf  = (char*)malloc(1518 * 1024 * sizeof(char));
-    output_pkt_buf = (char*)malloc(1518 * 1024 * sizeof(char));
+    
+    // input_pkt_buf  = (char*)malloc(1518 * 1024 * sizeof(char));
+    // output_pkt_buf = (char*)malloc(1518 * 1024 * sizeof(char));
+    // cudaMallocManaged(&input_pkt_buf, 1518 * 1024  * sizeof(char));
+    // cudaMallocManaged(&output_pkt_buf, 1518 * 1024  * sizeof(char));
+    // clock_gettime(CLOCK_MONOTONIC, &time1);
+    // printf("NM start: %ld s\n", time1.tv_sec*1000000000L + time1.tv_nsec);
 
     fprintf(stderr, "%s built %s %s\n\n", argv[0], __DATE__, __TIME__);
 
@@ -440,6 +478,11 @@ int main(int argc, char** argv) {
     // printf("Here after load rules.\n");
     allocate_nat_table(&nat_table);
     allocate_nat_set(&nat_set);
+    allocate_buf(&input_pkt_buf);
+    allocate_buf(&output_pkt_buf);
+
+    // clock_gettime(CLOCK_MONOTONIC, &time1);
+    // printf("Malloc Done: %ld s\n", time1.tv_sec*1000000000L + time1.tv_nsec);
 
     D("Wait %d secs for link to come up...", wait_link);
     sleep(wait_link);
@@ -563,8 +606,12 @@ int main(int argc, char** argv) {
     nmport_close(pb);
     nmport_close(pa);
 
-    free(input_pkt_buf);
-    free(output_pkt_buf);
+    // free(input_pkt_buf);
+    // free(output_pkt_buf);
+    // cudaFree(input_pkt_buf);
+    // cudaFree(output_pkt_buf);
+    free_buf(input_pkt_buf);
+    free_buf(output_pkt_buf);
     free_rules(ruleset);
     free_nat(nat_table, nat_set);
 

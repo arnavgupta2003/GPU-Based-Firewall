@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libnetmap.h>
 
 extern "C" {
 #include "nat.h"
@@ -30,5 +31,20 @@ int allocate_nat_set(unsigned long **d_nat) {
 int free_nat(unsigned int *d_nat_table, unsigned long *d_nat_set) {
   cudaFree(d_nat_table);
   cudaFree(d_nat_set);
+  return 0;
+}
+
+int allocate_buf(char **buf) {
+  char* buf_temp;
+
+  int a =cudaMallocManaged((char **)&buf_temp, 1518 * 1024  * sizeof(char));
+  *buf=buf_temp;
+
+  return 0;
+}
+
+int free_buf(char *buf){
+
+  cudaFree(buf);
   return 0;
 }

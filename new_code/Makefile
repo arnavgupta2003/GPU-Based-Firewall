@@ -18,10 +18,10 @@ endif
 
 
 run: main.o firewall.o rules.o nat.o
-	gcc -o run main.o firewall.o rules.o nat.o -lrt -lnetmap -lcudart -lstdc++
+	nvcc -o run main.o firewall.o rules.o nat.o -lrt -lnetmap -lcudart -lstdc++
 
 main.o: bridge.c firewall_kernels.h rules.h nat.h
-	gcc -I/home/nsl/Developer/netmap/sys -I/home/nsl/Developer/netmap/apps/include -I/home/nsl/Developer/netmap/libnetmap bridge.c -c -o main.o -lrt -lnetmap
+	nvcc -I/home/nsl/Developer/netmap/sys -I/home/nsl/Developer/netmap/apps/include -I/home/nsl/Developer/netmap/libnetmap bridge.c -c -o main.o -lrt -lnetmap
 
 #device.o: firewall.o nat.o rules.o
 #	nvcc --device-link firewall.o nat.o rules.o -o device.o
