@@ -222,7 +222,7 @@ static int rings_process_move(struct netmap_ring* rxring, struct netmap_ring* tx
     // clock_gettime(CLOCK_MONOTONIC, &time1);
     // printf("Just Before NMCPY: %ld s\n", time1.tv_sec*1000000000L + time1.tv_nsec);
 
-     // run_firewall(input_pkt_buf, output_pkt_buf, len, limit, len[limit], ruleset, num_lines, nat_table, nat_set);
+     run_firewall(input_pkt_buf, output_pkt_buf, len, limit, len[limit], ruleset, num_lines, nat_table, nat_set);
         // for(int count=0;count<len[limit];count++) {
     //  output_pkt_buf[count] = input_pkt_buf[count];
     // }
