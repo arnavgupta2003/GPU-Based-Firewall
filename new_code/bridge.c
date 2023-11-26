@@ -227,11 +227,12 @@ static int rings_process_move(struct netmap_ring* rxring, struct netmap_ring* tx
     //  output_pkt_buf[count] = input_pkt_buf[count];
     // }
     // output_pkt_buf = input_pkt_buf;
-    nm_pkt_copy(input_pkt_buf, output_pkt_buf, len[limit]);
 
-    // clock_gettime(CLOCK_MONOTONIC, &time1);
-    // printf("Just After NMCPY: %ld s\n", time1.tv_sec*1000000000L + time1.tv_nsec);
 
+
+    // nm_pkt_copy(input_pkt_buf, output_pkt_buf, len[limit]); // replacement for above for loop
+
+    
 
     /*printf("Done\n");
     printf("limit is %d\n", len[limit]);
@@ -475,7 +476,8 @@ int main(int argc, char** argv) {
     pollfd[1].fd = pb->fd;
 
     num_lines = load_rules("test_ruleset_nowildcards.csv", &ruleset);
-    // printf("Here after load rules.\n");
+    // num_lines = load_rules("rules_small.csv", &ruleset);
+    D("Here after loading %d rules\n",num_lines);
     allocate_nat_table(&nat_table);
     allocate_nat_set(&nat_set);
     allocate_buf(&input_pkt_buf);
