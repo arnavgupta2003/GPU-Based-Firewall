@@ -1,7 +1,10 @@
 #include <iostream>
 #include <cuda_runtime.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 extern "C" {
 #include "firewall_kernels.h"
 }
@@ -44,11 +47,16 @@ __device__ unsigned short bswap16(unsigned short x) {
     return (x >> 8) | (x << 8);
 }
 
+
 __device__ unsigned int bswap32(unsigned int x) {
     return ((x >> 24) & 0xff) |      // move byte 3 to byte 0
            ((x << 8) & 0xff0000) |   // move byte 1 to byte 2
            ((x >> 8) & 0xff00) |     // move byte 2 to byte 1
            ((x << 24) & 0xff000000); // byte 0 to byte 3
+}
+
+__device__ uint32_t device_ntohl(uint32_t x) {
+    return ((x & 0xFF) << 24) | (((x >> 8) & 0xFF) << 16) | (((x >> 16) & 0xFF) << 8) | ((x >> 24) & 0xFF);
 }
 
 __device__ unsigned short compute_checksum(unsigned short* addr, unsigned int count) {
@@ -223,6 +231,7 @@ __device__ unsigned int fnv_hash_short(unsigned short l1) {
     return hash;
 }
 
+
 __device__ unsigned int fnv_hash_gpu(unsigned long l1, unsigned long l2) {
     unsigned int hash = fnv_hash_long(l1);
 
@@ -294,7 +303,6 @@ __global__ void process_pkt(char* input_buf,
     unsigned int hash;
     unsigned long l1;
     unsigned long l2;
-
     if (tx < num_pkts) {
         pkt_start = len[tx];
 
@@ -308,16 +316,24 @@ __global__ void process_pkt(char* input_buf,
         // For TCP
         if (protocol == 6) {
 
-            src_addr = parse_int(input_buf, pkt_start + 14 + 12);
+            // src_addr = parse_int(input_buf, pkt_start + 14 + 12);
 
-            dst_addr = parse_int(input_buf, pkt_start + 14 + 16);
+            // dst_addr = parse_int(input_buf, pkt_start + 14 + 16);
 
             src_port = parse_short(input_buf, pkt_start + 14 + ip_header_len);
 
             dst_port = parse_short(input_buf, pkt_start + 14 + ip_header_len + 2);
 
-            l1 = src_addr;
-            l1 = l1 << 32 | dst_addr;
+            //inet_addr convert ntohl done
+            int pkt_inaddr_src = device_ntohl(((uint32_t)input_buf[pkt_start + 14 + 15] << 24) | ((uint32_t)input_buf[pkt_start + 14 + 14] << 16) |
+            ((uint32_t)input_buf[pkt_start + 14 + 13] << 8) |(uint32_t)input_buf[pkt_start + 14 + 12]);
+
+            int pkt_inaddr_dst = device_ntohl(((uint32_t)input_buf[pkt_start + 14 + 19] << 24) | ((uint32_t)input_buf[pkt_start + 14 + 18] << 16) |
+            ((uint32_t)input_buf[pkt_start + 14 + 17] << 8) |(uint32_t)input_buf[pkt_start + 14 + 16]);
+
+
+            l1 = pkt_inaddr_src;
+            l1 = l1 << 32 | pkt_inaddr_dst;
             l2 = src_port;
             l2 = l2 << 16 | dst_port;
             l2 = l2 << 8 | protocol;
@@ -328,20 +344,39 @@ __global__ void process_pkt(char* input_buf,
 
         // For ICMP
         else if (protocol == 1) {
-            src_addr = input_buf[pkt_start + 14 + 12];
-            dst_addr = input_buf[pkt_start + 14 + 16];
+            //inet_addr convert ntohl done
+            int pkt_inaddr_src = device_ntohl(((uint32_t)input_buf[pkt_start + 14 + 15] << 24) | ((uint32_t)input_buf[pkt_start + 14 + 14] << 16) |
+            ((uint32_t)input_buf[pkt_start + 14 + 13] << 8) |(uint32_t)input_buf[pkt_start + 14 + 12]);
+
+            int pkt_inaddr_dst = device_ntohl(((uint32_t)input_buf[pkt_start + 14 + 19] << 24) | ((uint32_t)input_buf[pkt_start + 14 + 18] << 16) |
+            ((uint32_t)input_buf[pkt_start + 14 + 17] << 8) |(uint32_t)input_buf[pkt_start + 14 + 16]);
+
+            src_addr = pkt_inaddr_src;
+            dst_addr = pkt_inaddr_dst;
             l1       = src_addr;
             l1       = l1 << 32 | dst_addr;
             l2       = protocol;
-            // for (int i=0;i<25;i++)
+
             hash = fnv_hash_gpu(l1, l2) % 10000;
+            
+            // printf("TEMP src (%d)\n  dst (%d)\n",(pkt_inaddr_src),pkt_inaddr_dst);
+            // printf("PKT STATS: %d , %d ,%d , %d ,%d -- ",src_addr,dst_addr,src_port,dst_port,hash);
+            // printf("PKT> src: %u, dst: %u, src_port: %hu, dst_port: %hu, protocol: %d , Hash %d , l1 %lu, l2 %lu ,", src_addr, dst_addr, src_port, dst_port, protocol,hash,l1,l2);
+        
         }
 
         // For UDP
         else if (protocol == 17) {
-            src_addr = input_buf[pkt_start + 14 + 12];
+            //inet_addr convert ntohl done
+            int pkt_inaddr_src = device_ntohl(((uint32_t)input_buf[pkt_start + 14 + 15] << 24) | ((uint32_t)input_buf[pkt_start + 14 + 14] << 16) |
+            ((uint32_t)input_buf[pkt_start + 14 + 13] << 8) |(uint32_t)input_buf[pkt_start + 14 + 12]);
+
+            int pkt_inaddr_dst = device_ntohl(((uint32_t)input_buf[pkt_start + 14 + 19] << 24) | ((uint32_t)input_buf[pkt_start + 14 + 18] << 16) |
+            ((uint32_t)input_buf[pkt_start + 14 + 17] << 8) |(uint32_t)input_buf[pkt_start + 14 + 16]);
+
+            src_addr = pkt_inaddr_src;
             src_port = input_buf[pkt_start + 14 + ip_header_len];
-            dst_addr = input_buf[pkt_start + 14 + 16];
+            dst_addr = pkt_inaddr_dst;
             dst_port = input_buf[pkt_start + 14 + ip_header_len + 2];
 
             l1 = src_addr;
@@ -364,6 +399,7 @@ __global__ void process_pkt(char* input_buf,
 
         for (int j = 0; j < 10; j++) {
             int index = hash * 3 * 10 + j * 3;
+            // printf(" --- idx :%d  ",index);
 
             if ((rules[index] == l1) && (rules[index + 1] == l2)) {
 
@@ -378,7 +414,7 @@ __global__ void process_pkt(char* input_buf,
                     ;
             }
         }
-
+        // printf("\n");
         if (!drop) {
 
             // Dynamic NATing
@@ -445,14 +481,14 @@ __global__ void process_pkt(char* input_buf,
                 //DEB:printing input_buf
                 // for (int i = pkt_start; i < pkt_start+14+18; ++i)
                 // {
-                //     printf("0x%04x \n",input_buf[i]);
+                    // printf("0x%04x \n",input_buf[i]);
                 // }
                 //Ending deb
                 
-                compute_tcp_checksum(
-                  (struct tcphdr*)&input_buf[pkt_start + 34], (unsigned short*)&input_buf[pkt_start +14], (struct iphdr*)&input_buf[pkt_start + 14]);
+                // compute_tcp_checksum(
+                //   (struct tcphdr*)&input_buf[pkt_start + 34], (unsigned short*)&input_buf[pkt_start +14], (struct iphdr*)&input_buf[pkt_start + 14]);
 
-                compute_ip_checksum((struct iphdr*)&input_buf[pkt_start + 14], num_lines);
+                // compute_ip_checksum((struct iphdr*)&input_buf[pkt_start + 14], num_lines);
 
 
                
@@ -474,50 +510,31 @@ __global__ void process_pkt(char* input_buf,
                 // input_buf[pkt_start+14+15] = (nat_ip << 24) >> 24;
 
                 
-                compute_tcp_checksum(
-                  (struct tcphdr*)&input_buf[pkt_start + 34], (unsigned short*)&input_buf[pkt_start +14], (struct iphdr*)&input_buf[pkt_start + 14]);
+                // compute_tcp_checksum(
+                //   (struct tcphdr*)&input_buf[pkt_start + 34], (unsigned short*)&input_buf[pkt_start +14], (struct iphdr*)&input_buf[pkt_start + 14]);
 
-                compute_ip_checksum((struct iphdr*)&input_buf[pkt_start + 14], num_lines);
+                // compute_ip_checksum((struct iphdr*)&input_buf[pkt_start + 14], num_lines);
 
                
             }
 
             // Intranet packet
-            else
-                ;
+           
+                
 
             // printf("Packet passed. Copying...\n");
             for (int i = len[tx]; i < len[tx + 1]; i++) {
                 output_buf[i] = input_buf[i];
             }
+        }else{
+            // printf("DROP PJKT");
+            for (int i = len[tx]; i < len[tx + 1]; i++) {
+                input_buf[i] = 255;//drop pkt
+            }
         }
     }
 }
 
-__global__ void process_pkt1(char* input_buf,
-                             char* output_buf,
-                             int* len,
-                             int num_pkts,
-                             int buf_len) {
-    int tx = threadIdx.x + blockIdx.x * blockDim.x;
-
-   
-    if (tx < num_pkts) {
-        int pkt_start = len[tx];
-        int pkt_end = len[tx + 1];
-        int pkt_len = pkt_end - pkt_start;
-
-        
-        //Copy the packet data from input_buf to output_buf
-
-        // for (int i = 0; i < pkt_len; i++) {
-        //     output_buf[pkt_start + i] = input_buf[pkt_start + i];
-        // }
-        // output_buf[pkt_start] = input_buf[pkt_start];
-        memcpy(&output_buf[pkt_start], &input_buf[pkt_start], pkt_len);
-    
-    }
-}
 
 void run_firewall(char* input_buf,
                   char* output_buf,
@@ -542,8 +559,12 @@ void run_firewall(char* input_buf,
     process_pkt<<<num_blocks, threads_per_block>>>(input_buf, output_buf, d_len, num_pkts, buf_len,rules, num_lines, nat_table, nat_set);
     // d_input_buf, d_output_buf, d_len, num_pkts, buf_len, rules, num_lines, nat_table, nat_set
     cudaDeviceSynchronize();
+    cudaFree(d_len);
 
     // clock_gettime(CLOCK_MONOTONIC, &time1);
     // printf("Just After GPU COPY: %ld s\n", time1.tv_sec*1000000000L + time1.tv_nsec);
 
 }
+
+
+
